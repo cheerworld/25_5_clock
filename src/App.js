@@ -6,58 +6,74 @@ import { useEffect, useState, useRef } from "react";
 
 library.add(fas);
 
+function useInterval(callback, delay, start, displayTitle) {
+  const savedCallback = useRef();
+
+  useEffect(() => {
+    savedCallback.current = callback;
+  });
+
+  useEffect(() => {
+    function tick() {
+      savedCallback.current();
+    }
+
+    let id;
+    if (start) {
+      id = setInterval(tick, delay);
+    } else {
+      clearInterval(id);
+    }
+
+    return () => clearInterval(id);
+  }, [delay, start, displayTitle]);
+}
+
 function App() {
   const [breakLen, setBreakLen] = useState(5);
   const [sessionLen, setSessionLen] = useState(25);
   const [displayedVal, setDisplayedVal] = useState(sessionLen * 60);
   const [start, setStart] = useState(false);
-  const [onBreak, setOnBreak] = useState(false);
   const [displayTitle, setDisplayTitle] = useState("Session");
-
-  const effectRan = useRef(false);
-  const setCountdownInterval = useRef();
+  const [delay, setDelay] = useState(1000);
 
   useEffect(() => {
     setDisplayedVal(sessionLen * 60);
   }, [sessionLen]);
 
-  useEffect(() => {
-    if (effectRan.current) {
-      if (start) {
-        setCountdownInterval.current = setInterval(() => {
-          setDisplayedVal((oldState) => {
-            if (oldState > 0) {
-              return oldState - 1;
-            } else if (!onBreak) {
-              setOnBreak(!onBreak);
-              setDisplayTitle("Break");
-              return breakLen * 60;
-            } else {
-              setOnBreak(!onBreak);
-              setDisplayTitle("Session");
-              return sessionLen * 60;
-            }
-          });
-        }, 1000);
-      } else {
-        clearInterval(setCountdownInterval.current);
-      }
-    }
-    return () => {
-      effectRan.current = true;
-      clearInterval(setCountdownInterval.current);
-    };
-  }, [start, onBreak, displayTitle]);
+  useInterval(
+    () => {
+      setDisplayedVal((oldState) => {
+        if (oldState > 0) {
+          if (delay !== 1000) {
+            setDelay(1000);
+          }
+          return oldState - 1;
+        } else if (displayTitle === "Session" && oldState === 0) {
+          setDisplayTitle("Break");
+          document.getElementById("beep").play();
+          setDelay(1050);
+          return breakLen * 60;
+        } else {
+          setDisplayTitle("Session");
+          document.getElementById("beep").play();
+          setDelay(1050);
+          return sessionLen * 60;
+        }
+      });
+    },
+    delay,
+    start,
+    displayTitle
+  );
 
   useEffect(() => {
-    if (displayedVal === 0) {
-      document.getElementById("beep").play();
-    } else if (displayedVal < 60) {
+    if (displayedVal < 60) {
       document.querySelector(".timer").style.color = "rgb(165, 13, 13)";
     } else {
       document.querySelector(".timer").style.color = "white";
     }
-  }, [displayedVal]);
+  }, [displayedVal, start]);
 
   const breakArrows = (e) => {
     const btnId = e.currentTarget.id;
@@ -98,17 +114,17 @@ function App() {
   };
 
   const startOrStop = () => {
-    setStart((oldState) => {
-      return !oldState;
-    });
+    setStart(!start);
   };
 
   const reset = () => {
+    setDisplayTitle("Session");
     setBreakLen(5);
     setSessionLen(25);
     setDisplayedVal(25 * 60);
-    setDisplayTitle("Session");
-    clearInterval(setCountdownInterval.current);
+    setStart(false);
+    document.getElementById("beep").pause();
+    document.getElementById("beep").currentTime = 0;
   };
 
   return (
@@ -180,8 +196,9 @@ function App() {
               <div id="time-left">
                 {Math.floor(displayedVal / 60)
                   .toString()
-                  .padStart(2, "0")}
-                :{(displayedVal % 60).toString().padStart(2, "0")}
+                  .padStart(2, "0") +
+                  ":" +
+                  (displayedVal % 60).toString().padStart(2, "0")}
               </div>
             </div>
           </div>
